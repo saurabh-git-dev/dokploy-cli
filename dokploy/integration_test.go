@@ -65,6 +65,7 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 
 	ctx := context.Background()
 
+	t.Logf("[integration] creating project 'Integration Project'")
 	projID, err := CreateProject(ctx, client, "ignored", "Integration Project")
 	if err != nil {
 		t.Fatalf("CreateProject error: %v", err)
@@ -76,6 +77,7 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 		t.Errorf("createdProjectName = %q, want %q", createdProjectName, "Integration Project")
 	}
 
+	t.Logf("[integration] creating environment 'Integration Env' in project %s", projID)
 	envID, err := CreateEnvironment(ctx, client, "ignored", "Integration Env", projID)
 	if err != nil {
 		t.Fatalf("CreateEnvironment error: %v", err)
@@ -89,4 +91,6 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 	if createdEnvProjectID != projID {
 		t.Errorf("createdEnvProjectID = %q, want %q", createdEnvProjectID, projID)
 	}
+
+	t.Logf("[integration] created project %s and environment %s successfully", projID, envID)
 }
