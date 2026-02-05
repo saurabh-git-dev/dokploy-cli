@@ -108,3 +108,127 @@ func TestE2E_ProjectAndEnvironment(t *testing.T) {
 	}
 	t.Logf("[live] cleanup complete for project %s and environment %s", projectID, envID)
 }
+
+// TestE2E_ComposeAppWithDomain creates a compose app with a sample docker file
+// and configures a domain for a service inside the docker compose.
+// It only runs when built with -tags e2e and when DOKPLOY_URL and
+// DOKPLOY_API_KEY are set.
+func TestE2E_ComposeAppWithDomain(t *testing.T) {
+	client := newLiveClient(t)
+
+	ctx := context.Background()
+	suffix := time.Now().UnixNano()
+
+	// Step 1: Create a project and environment
+	projectName := fmt.Sprintf("dokploy-cli-compose-test-%d", suffix)
+	t.Logf("[live] creating project %q", projectName)
+	projectID, envID, err := dokploy.CreateProject(ctx, client, projectName, "", "production")
+	if err != nil {
+		t.Fatalf("CreateProject (live) error: %v", err)
+	}
+	if projectID == "" || envID == "" {
+		t.Fatalf("CreateProject (live) returned empty project ID or environment ID")
+	}
+	t.Logf("[live] created project with ID %s and environment ID %s", projectID, envID)
+
+	// Cleanup function
+	cleanup := func() {
+		t.Logf("[live] cleaning up project %s", projectID)
+		if err := dokploy.DeleteProject(ctx, client, projectID); err != nil {
+			t.Logf("[live] warning: cleanup DeleteProject error: %v", err)
+		}
+	}
+	defer cleanup()
+
+	// Step 2: Create a compose app with a sample docker-compose file
+	// Using nginx as a generic docker web image
+	composeContent := `services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+`
+
+	composeName := fmt.Sprintf("test-compose-%d", suffix)
+	t.Logf("[live] creating compose app %q", composeName)
+	composeID, err := dokploy.CreateOrUpdateCompose(
+		ctx,
+		client,
+		"",            // no ID, creating new
+		composeName,
+		envID,
+		composeContent,
+		map[string]string{
+			"TEST_ENV": "test-value",
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateOrUpdateCompose (live) error: %v", err)
+	}
+	if composeID == "" {
+		t.Fatalf("CreateOrUpdateCompose (live) returned empty compose ID")
+	}
+	t.Logf("[live] created compose app with ID %s", composeID)
+
+	// Step 3: Create a domain for the web service
+	domainHost := fmt.Sprintf("test-%d.example.com", suffix)
+	t.Logf("[live] creating domain %q for service 'web' on port 8080", domainHost)
+	domainID, err := dokploy.CreateOrUpdateDomain(
+		ctx,
+		client,
+		"",           // no ID, creating new
+		domainHost,
+		"/",
+		8080,
+		"web",
+		composeID,
+		"none",
+		false,
+	)
+	if err != nil {
+		t.Fatalf("CreateOrUpdateDomain (live) error: %v", err)
+	}
+	if domainID == "" {
+		t.Fatalf("CreateOrUpdateDomain (live) returned empty domain ID")
+	}
+	t.Logf("[live] created domain with ID %s", domainID)
+
+	// Step 4: Verify the compose app exists
+	t.Logf("[live] verifying compose app %s exists", composeID)
+	composeData, err := dokploy.GetCompose(ctx, client, composeID, "")
+	if err != nil {
+		t.Fatalf("GetCompose (live) error: %v", err)
+	}
+	if composeData == nil {
+		t.Fatalf("GetCompose (live) returned nil data")
+	}
+	t.Logf("[live] verified compose app exists")
+
+	// Step 5: Deploy the compose app
+	t.Logf("[live] deploying compose app %s", composeID)
+	if err := dokploy.DeployCompose(ctx, client, composeID); err != nil {
+		t.Fatalf("DeployCompose (live) error: %v", err)
+	}
+	t.Logf("[live] compose app deployed successfully")
+
+	// Step 6: Clean up domain explicitly
+	t.Logf("[live] deleting domain %s", domainID)
+	if err := dokploy.DeleteDomain(ctx, client, domainID); err != nil {
+		t.Logf("[live] warning: DeleteDomain error: %v", err)
+	} else {
+		t.Logf("[live] domain deleted successfully")
+	}
+
+	// Step 7: Clean up compose app explicitly
+	t.Logf("[live] deleting compose app %s", composeID)
+	if err := dokploy.DeleteCompose(ctx, client, composeID, true); err != nil {
+		t.Logf("[live] warning: DeleteCompose error: %v", err)
+	} else {
+		t.Logf("[live] compose app deleted successfully")
+	}
+
+	t.Logf("[live] test completed successfully - project %s, compose %s, domain %s", projectID, composeID, domainID)
+}
