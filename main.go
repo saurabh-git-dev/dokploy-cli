@@ -29,13 +29,15 @@ func main() {
 		}(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:     "url",
-				Usage:    "Dokploy base API URL",
+				Name:    "url",
+				Usage:   "Dokploy base API URL (or set DOKPLOY_URL)",
+				EnvVars: []string{"DOKPLOY_URL"},
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:     "key",
-				Usage:    "Dokploy API key",
+				Name:    "key",
+				Usage:   "Dokploy API key (or set DOKPLOY_API_KEY)",
+				EnvVars: []string{"DOKPLOY_API_KEY"},
 				Required: true,
 			},
 		},
