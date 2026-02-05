@@ -1,0 +1,55 @@
+name: Release dokploy CLI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name for this release (e.g. v1.0.0)"
+        required: true
+      prerelease:
+        description: "Mark this release as a prerelease"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build_and_release:
+    name: Build binaries and create release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary
+        run: |
+          mkdir -p build
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
+          OUTPUT="build/dokploy_${{ matrix.goos }}_${{ matrix.goarch }}$EXT"
+          echo "Building $OUTPUT"
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags "-X 'main.version=${{ github.event.inputs.tag }}' -X 'main.commit=${{ github.sha }}'" -o "$OUTPUT" .
+
+      - name: Create GitHub release and upload asset
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.tag }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease }}
+          files: build/*
