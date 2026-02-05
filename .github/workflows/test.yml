@@ -23,8 +23,5 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run unit tests
+      - name: Run tests (including integration tests)
         run: go test -v ./...
-
-      - name: Run integration tests
-        run: go test -v -run Integration
