@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"dokploy-cli/dokploy"
+	"github.com/saurabh-git-dev/dokploy-cli/dokploy"
 
 	cli "github.com/urfave/cli/v2"
 )
@@ -20,7 +20,7 @@ var (
 func main() {
 	app := &cli.App{
 		Name:  "dokploy cli",
-		Usage: "Manage Dokploy projects, environments, compose apps, and domains",
+		Usage: "Manage Dokploy projects, compose apps, and domains",
 		Version: func() string {
 			if commit == "" {
 				return version
@@ -29,21 +29,20 @@ func main() {
 		}(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "url",
-				Usage:   "Dokploy base API URL (or set DOKPLOY_URL)",
-				EnvVars: []string{"DOKPLOY_URL"},
+				Name:     "url",
+				Usage:    "Dokploy base API URL (or set DOKPLOY_URL)",
+				EnvVars:  []string{"DOKPLOY_URL"},
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:    "key",
-				Usage:   "Dokploy API key (or set DOKPLOY_API_KEY)",
-				EnvVars: []string{"DOKPLOY_API_KEY"},
+				Name:     "key",
+				Usage:    "Dokploy API key (or set DOKPLOY_API_KEY)",
+				EnvVars:  []string{"DOKPLOY_API_KEY"},
 				Required: true,
 			},
 		},
 		Commands: []*cli.Command{
 			projectCommand(),
-			environmentCommand(),
 			composeCommand(),
 			domainCommand(),
 		},
@@ -70,21 +69,39 @@ func projectCommand() *cli.Command {
 		Subcommands: []*cli.Command{
 			{
 				Name:  "create",
-				Usage: "Create a project",
+				Usage: "Create/Get a project and its default environment",
 				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "id", Usage: "Project ID", Required: true},
 					&cli.StringFlag{Name: "name", Usage: "Project name", Required: true},
+					&cli.StringFlag{Name: "description", Usage: "Project description"},
+					&cli.StringFlag{Name: "environment", Usage: "Environment name", Value: "production"},
+					&cli.StringFlag{Name: "return", Usage: "Which ID to print (projectId/environmentId/both)", Value: "environmentId"},
 				},
 				Action: func(c *cli.Context) error {
 					client, err := newClientFromCtx(c)
 					if err != nil {
 						return err
 					}
-					id, err := dokploy.CreateProject(c.Context, client, c.String("id"), c.String("name"))
-					if err != nil {
-						return err
+
+					var projectId, envId string
+					projectId, envId, err = dokploy.GetProject(c.Context, client, c.String("name"), c.String("environment"))
+					if projectId == "" {
+						projectId, envId, err = dokploy.CreateProject(c.Context, client, c.String("name"), c.String("description"), c.String("environment"))
+						if err != nil {
+							return err
+						}
 					}
-					fmt.Println(id)
+
+					mode := strings.ToLower(c.String("return"))
+					switch mode {
+					case "", "environmentid":
+						fmt.Println(envId)
+					case "projectid":
+						fmt.Println(projectId)
+					case "both":
+						fmt.Printf("%s %s\n", projectId, envId)
+					default:
+						return fmt.Errorf("invalid --return value %q, must be one of: projectId, environmentId, both", mode)
+					}
 					return nil
 				},
 			},
@@ -104,60 +121,6 @@ func projectCommand() *cli.Command {
 						return err
 					}
 					fmt.Println("Deleted project", id)
-					return nil
-				},
-			},
-		},
-	}
-}
-
-// ENVIRONMENT COMMANDS
-
-func environmentCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "environment",
-		Usage: "Manage environments",
-		Subcommands: []*cli.Command{
-			{
-				Name:  "create",
-				Usage: "Create an environment",
-				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "id", Usage: "Environment ID"},
-					&cli.StringFlag{Name: "name", Usage: "Environment name"},
-					&cli.StringFlag{Name: "projectId", Usage: "Parent project ID", Required: true},
-				},
-				Action: func(c *cli.Context) error {
-					if c.String("id") == "" && c.String("name") == "" {
-						return errors.New("either --id or --name is required")
-					}
-					client, err := newClientFromCtx(c)
-					if err != nil {
-						return err
-					}
-					id, err := dokploy.CreateEnvironment(c.Context, client, c.String("id"), c.String("name"), c.String("projectId"))
-					if err != nil {
-						return err
-					}
-					fmt.Println(id)
-					return nil
-				},
-			},
-			{
-				Name:  "delete",
-				Usage: "Delete an environment",
-				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "id", Usage: "Environment ID", Required: true},
-				},
-				Action: func(c *cli.Context) error {
-					client, err := newClientFromCtx(c)
-					if err != nil {
-						return err
-					}
-					id := c.String("id")
-					if err := dokploy.DeleteEnvironment(c.Context, client, id); err != nil {
-						return err
-					}
-					fmt.Println("Deleted environment", id)
 					return nil
 				},
 			},

@@ -1,4 +1,4 @@
-package dokploy
+package main
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/saurabh-git-dev/dokploy-cli/dokploy"
 )
 
 // TestIntegration_ProjectEnvironmentFlow exercises the client and project/environment
@@ -15,9 +17,6 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 
 	var createdProjectID string
 	var createdProjectName string
-	var createdEnvID string
-	var createdEnvName string
-	var createdEnvProjectID string
 
 	mux := http.NewServeMux()
 
@@ -36,29 +35,30 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 			t.Errorf("project name = %q, want %q", name, "Integration Project")
 		}
 		createdProjectName, _ = body["name"].(string)
-		_ = json.NewEncoder(w).Encode(map[string]any{"projectId": createdProjectID})
-	})
-
-	mux.HandleFunc("/api/environment.create", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		createdEnvID = "env-integration-1"
-		createdEnvName, _ = body["name"].(string)
-		createdEnvProjectID, _ = body["projectId"].(string)
-		_ = json.NewEncoder(w).Encode(map[string]any{"environmentId": createdEnvID})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"project": map[string]any{
+				"projectId":      createdProjectID,
+				"name":           createdProjectName,
+				"description":    nil,
+				"createdAt":      "2026-02-05T09:27:24.786Z",
+				"organizationId": "org-integration",
+				"env":            "",
+			},
+			"environment": map[string]any{
+				"environmentId": "env-integration-default",
+				"name":          "production",
+				"description":   "Default environment",
+				"createdAt":     "2026-02-05T09:27:24.790Z",
+				"env":           "",
+				"projectId":     createdProjectID,
+			},
+		})
 	})
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	client, err := NewClient(ts.URL, "integration-key")
+	client, err := dokploy.NewClient(ts.URL, "integration-key")
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 	ctx := context.Background()
 
 	t.Logf("[integration] creating project 'Integration Project'")
-	projID, err := CreateProject(ctx, client, "ignored", "Integration Project")
+	projID, envID, err := dokploy.CreateProject(ctx, client, "Integration Project", "", "production")
 	if err != nil {
 		t.Fatalf("CreateProject error: %v", err)
 	}
@@ -75,21 +75,6 @@ func TestIntegration_ProjectEnvironmentFlow(t *testing.T) {
 	}
 	if createdProjectName != "Integration Project" {
 		t.Errorf("createdProjectName = %q, want %q", createdProjectName, "Integration Project")
-	}
-
-	t.Logf("[integration] creating environment 'Integration Env' in project %s", projID)
-	envID, err := CreateEnvironment(ctx, client, "ignored", "Integration Env", projID)
-	if err != nil {
-		t.Fatalf("CreateEnvironment error: %v", err)
-	}
-	if envID == "" || envID != createdEnvID {
-		t.Fatalf("unexpected environment ID: got %q, want %q", envID, createdEnvID)
-	}
-	if createdEnvName != "Integration Env" {
-		t.Errorf("createdEnvName = %q, want %q", createdEnvName, "Integration Env")
-	}
-	if createdEnvProjectID != projID {
-		t.Errorf("createdEnvProjectID = %q, want %q", createdEnvProjectID, projID)
 	}
 
 	t.Logf("[integration] created project %s and environment %s successfully", projID, envID)

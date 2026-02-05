@@ -15,7 +15,7 @@ Example prefix you can reuse (no flags needed if env vars are set):
 export DOKPLOY_URL="https://your-dokploy-instance.com"
 export DOKPLOY_API_KEY="YOUR-GENERATED-API-KEY"
 
-dokploy project create --id my-project-id --name "My Project"
+dokploy project create --name "My Project" --description "Production project" --environment "production" --return both
 ```
 
 > All `create` / `create-or-update` commands print the resource **ID** returned by Dokploy (when available) on stdout so you can capture it in scripts and feed it into the next command.
@@ -31,12 +31,24 @@ dokploy \
   --url "$DOKPLOY_URL" \
   --key "$DOKPLOY_KEY" \
   project create \
-  --id my-project-id \
-  --name "My Project"
+  --name "My Project" \
+  --description "Production project" \
+  --environment "production" \
+  --return both
 ```
 
-- Creates a project with the given `name` (Dokploy assigns the real project ID).
-- Prints the project ID on stdout if Dokploy includes it in the response.
+- Creates a project with the given `name` (Dokploy assigns the real project ID and a default environment).
+- Optional `--description` sets the project description.
+- Optional `--environment` sets the name of the default environment (defaults to `production`).
+- `--return` controls what is printed:
+  - `environmentId` (default): prints only the environment ID.
+  - `projectId`: prints only the project ID.
+  - `both`: prints `projectId environmentId` (space separated) on a single line.
+
+  ```text
+  projectId=...
+  environmentId=...
+  ```
 
 ### Delete project
 
@@ -46,34 +58,6 @@ dokploy \
   --key "$DOKPLOY_KEY" \
   project delete \
   --id my-project-id
-```
-
----
-
-## Environment commands
-
-### Create environment
-
-```bash
-dokploy \
-  --url "$DOKPLOY_URL" \
-  --key "$DOKPLOY_KEY" \
-  environment create \
-  --projectId my-project-id \
-  --name "staging"
-```
-
-- Either `--id` or `--name` is required by the CLI (typically you use `--name`).
-- Prints the environment ID on stdout if Dokploy includes it in the response.
-
-### Delete environment
-
-```bash
-dokploy \
-  --url "$DOKPLOY_URL" \
-  --key "$DOKPLOY_KEY" \
-  environment delete \
-  --id my-environment-id
 ```
 
 ---
@@ -203,7 +187,7 @@ dokploy \
 
 ---
 
-## End-to-end example (project → environment → compose → domain)
+## End-to-end example (project → compose → domain)
 
 Below is a simple shell flow that wires everything together. Each step prints an ID that is captured into a variable and passed to the next step.
 
@@ -211,19 +195,14 @@ Below is a simple shell flow that wires everything together. Each step prints an
 export DOKPLOY_URL="https://your-dokploy-instance.com"
 export DOKPLOY_KEY="YOUR-GENERATED-API-KEY"
 
-# 1. Create project
-PROJECT_ID=$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
-  project create --id my-project --name "My Project")
+# 1. Create project (and get its default environment)
+read PROJECT_ID ENV_ID <<< "$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
+  project create --name "My Project" --description "Production project" --environment "production" --return both)"
 
 echo "Project ID: $PROJECT_ID"
-
-# 2. Create environment in that project
-ENV_ID=$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
-  environment create --projectId "$PROJECT_ID" --name "staging")
-
 echo "Environment ID: $ENV_ID"
 
-# 3. Create compose app for that environment
+# 2. Create compose app for that environment
 COMPOSE_ID=$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
   compose create \
   --name "my-compose-app" \
@@ -233,7 +212,7 @@ COMPOSE_ID=$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
 
 echo "Compose ID: $COMPOSE_ID"
 
-# 4. Create domain pointing to the compose app
+# 3. Create domain pointing to the compose app
 DOMAIN_ID=$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
   domain create \
   --host example.com \
@@ -246,7 +225,7 @@ DOMAIN_ID=$(dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
 
 echo "Domain ID: $DOMAIN_ID"
 
-# 5. Deploy the compose app
+# 4. Deploy the compose app
 
 dokploy --url "$DOKPLOY_URL" --key "$DOKPLOY_KEY" \
   compose deploy --id "$COMPOSE_ID"

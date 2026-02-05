@@ -1,4 +1,7 @@
-package dokploy
+//go:build e2e
+// +build e2e
+
+package main
 
 import (
 	"bufio"
@@ -8,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/saurabh-git-dev/dokploy-cli/dokploy"
 )
 
 // loadEnvFromFile loads simple KEY=VALUE pairs from the given .env-style file.
@@ -43,7 +48,7 @@ func loadEnvFromFile(path string) {
 
 // newLiveClient constructs a Client for a real Dokploy server using
 // environment variables. Tests are skipped if configuration is missing.
-func newLiveClient(t *testing.T) *Client {
+func newLiveClient(t *testing.T) *dokploy.Client {
 	t.Helper()
 
 	// Allow configuring tests via a .env file as well as real env vars.
@@ -59,17 +64,18 @@ func newLiveClient(t *testing.T) *Client {
 
 	t.Logf("[live] using DOKPLOY_URL=%s", baseURL)
 
-	client, err := NewClient(baseURL, apiKey)
+	client, err := dokploy.NewClient(baseURL, apiKey)
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
 	return client
 }
 
-// TestLive_ProjectAndEnvironment performs a small end-to-end flow against a
-// real Dokploy server: create project, create environment, then clean up.
-// It only runs when DOKPLOY_URL and DOKPLOY_API_KEY are set.
-func TestLive_ProjectAndEnvironment(t *testing.T) {
+// TestE2E_ProjectAndEnvironment performs a small end-to-end flow against a
+// real Dokploy server: create project, then clean up.
+// It only runs when built with -tags e2e and when DOKPLOY_URL and
+// DOKPLOY_API_KEY are set.
+func TestE2E_ProjectAndEnvironment(t *testing.T) {
 	client := newLiveClient(t)
 
 	ctx := context.Background()
@@ -77,34 +83,27 @@ func TestLive_ProjectAndEnvironment(t *testing.T) {
 
 	projectName := fmt.Sprintf("dokploy-cli-test-project-%d", suffix)
 	t.Logf("[live] creating project %q", projectName)
-	projectID, err := CreateProject(ctx, client, "ignored", projectName)
+	projectID, envID, err := dokploy.CreateProject(ctx, client, projectName, "", "production")
 	if err != nil {
 		t.Fatalf("CreateProject (live) error: %v", err)
 	}
 	if projectID == "" {
 		t.Fatalf("CreateProject (live) returned empty project ID")
 	}
-	t.Logf("[live] created project with ID %s", projectID)
+	t.Logf("[live] created project with ID %s and environment ID %s", projectID, envID)
 
-	envName := fmt.Sprintf("dokploy-cli-test-env-%d", suffix)
-	t.Logf("[live] creating environment %q in project %s", envName, projectID)
-	envID, err := CreateEnvironment(ctx, client, "ignored", envName, projectID)
+	t.Logf("[live] getting project %q", projectName)
+	projectID, envID, err = dokploy.GetProject(ctx, client, projectName, "production")
 	if err != nil {
-		t.Fatalf("CreateEnvironment (live) error: %v", err)
+		t.Fatalf("GetProject (live) error: %v", err)
 	}
-	if envID == "" {
-		t.Fatalf("CreateEnvironment (live) returned empty environment ID")
+	if projectID == "" {
+		t.Fatalf("GetProject (live) returned empty project ID")
 	}
-	t.Logf("[live] created environment with ID %s", envID)
+	t.Logf("[live] Found project with ID %s and environment ID %s", projectID, envID)
 
-	// Best-effort cleanup; failures here still fail the test so we know
-	// if the Dokploy API rejected deletes.
-	t.Logf("[live] deleting environment %s", envID)
-	if err := DeleteEnvironment(ctx, client, envID); err != nil {
-		t.Fatalf("DeleteEnvironment (live) error: %v", err)
-	}
 	t.Logf("[live] deleting project %s", projectID)
-	if err := DeleteProject(ctx, client, projectID); err != nil {
+	if err := dokploy.DeleteProject(ctx, client, projectID); err != nil {
 		t.Fatalf("DeleteProject (live) error: %v", err)
 	}
 	t.Logf("[live] cleanup complete for project %s and environment %s", projectID, envID)

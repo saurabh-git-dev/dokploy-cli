@@ -1,6 +1,6 @@
 # Dokploy CLI (Go)
 
-A minimal Go-based CLI to manage Dokploy projects, environments, compose apps, and domains via the Dokploy HTTP API.
+A minimal Go-based CLI to manage Dokploy projects, compose apps, and domains (using each project's default environment) via the Dokploy HTTP API.
 
 The binary exposes a single top-level command, `dokploy`, with subcommands for each resource.
 
@@ -41,35 +41,28 @@ See here [USAGE.md](USAGE.md)
 
 ## Testing
 
-This repository includes unit tests for the Dokploy client and helpers.
+This repository includes unit tests, integration tests, and optional end-to-end (e2e) tests for the Dokploy client and helpers.
 
 - Run all tests (root + subpackages):
 
   ```bash
-  go test ./...
+  go test -v ./...
   ```
 
-- Run only the dokploy package tests:
+- Run integration tests (fake Dokploy HTTP server, end-to-end project + default environment flow):
 
   ```bash
-  go test ./dokploy
+  go test -v -run Integration
   ```
 
-- Run integration tests (fake Dokploy HTTP server, end-to-end project+environment flow):
+- Run end-to-end (e2e) Dokploy API tests (against a real Dokploy instance):
 
   ```bash
-  go test ./dokploy -run Integration
-  ```
-
-- Run live Dokploy API tests (against a real Dokploy instance):
-
-  ```bash
-  # Configure your Dokploy instance and API key
   export DOKPLOY_URL="https://your-dokploy-instance.com"
   export DOKPLOY_API_KEY="YOUR-GENERATED-API-KEY"
 
-  # Run only the live tests
-  go test ./dokploy -run Live
+  # Run only the e2e tests (requires -tags e2e)
+  go test -v -tags e2e . -run E2E
   ```
 
-  These live tests perform a small create/delete flow (project + environment) against the configured Dokploy instance. They are automatically skipped if `DOKPLOY_URL` or `DOKPLOY_API_KEY` is not set.
+  These e2e tests perform a small create/delete flow (project + its default environment) against the configured Dokploy instance. They are automatically skipped if `DOKPLOY_URL` or `DOKPLOY_API_KEY` is not set.

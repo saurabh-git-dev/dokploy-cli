@@ -1,4 +1,4 @@
-module dokploy-cli
+module github.com/saurabh-git-dev/dokploy-cli
 
 go 1.24.10
 
